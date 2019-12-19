@@ -180,19 +180,45 @@ namespace NsRenderLib
 
 		struct tHalfTri {
 			Vector4f p0, p1, p2;
+			bool is_valid=false;
 		};
 
 		const uint32_t color = aDrawOptions.m_color.value_or(m_default_color);
 		
-		std::array<size_t, 3> lmr = sorted_idx(0);	//left, middle, right
-		std::array<size_t, 3> bmt = sorted_idx(1);	//bottom, middle, top
+		//get left, middle, right and bottom,middle,top vertiex indices
+		std::array<size_t, 3> lmr = sorted_idx(0);	
+		std::array<size_t, 3> bmt = sorted_idx(1);
 		
-		auto half_triangles = array<tHalfTri, 2>{
-			tHalfTri{aVertices[lmr[0]], aVertices[lmr[2]], aVertices[bmt[0]]},
-			tHalfTri{aVertices[lmr[0]], aVertices[lmr[2]], aVertices[bmt[2]]},
-		};
+		//cut triangle -> cut line have to be x axis aligned
+		const auto half_triangles = [&]() -> auto {
+			array<tHalfTri, 2> ret;
 
+			const Vector4f& top = aVertices[bmt[2]];
+			const Vector4f& middle = aVertices[bmt[1]];
+			const Vector4f& bottom = aVertices[bmt[0]];
+
+			if (top[1] == middle[1] ) {
+				ret[0] = { middle, top, bottom, true };
+			}
+			else if (bottom[1] == middle[1]) {
+				ret[0] = { middle, bottom, top, true };
+			}
+			else {
+				const Vector4f bottom_top = top - bottom;
+				const float bottom_mult = (middle[1] - bottom[1]) / bottom_top[1];
+				const Vector4f other_middle = bottom + bottom_top * bottom_mult;
+				
+				ret[0] = { middle, other_middle, top, true };
+				ret[1] = { middle, other_middle, bottom, true };
+			}
+
+			return ret;
+		}();
+			
+		//draw 1 or 2 triangles (vertical line is x axis aligned)
 		for (const tHalfTri& iHalfTri: half_triangles) {
+			if (!iHalfTri.is_valid)
+				continue;
 			if (iHalfTri.p0[1] != iHalfTri.p1[1])
 				throw "line p1---p2 have to be horizontal";
 			
@@ -220,12 +246,24 @@ namespace NsRenderLib
 				curr_p1[1] += sign;
 				curr_p1[0] += p1_delta;
 			}
+
+			impl_drawLine(iHalfTri.p0, iHalfTri.p1, 0xFF00);
+			impl_drawLine(iHalfTri.p1, iHalfTri.p2, 0xFF00);
+			impl_drawLine(iHalfTri.p2, iHalfTri.p0, 0xFF00);
 		}
 
 		//for debug
-		impl_drawLine(aVertices[0], aVertices[1], 0xFF0000);
-		impl_drawLine(aVertices[1], aVertices[2], 0xFF0000);
-		impl_drawLine(aVertices[2], aVertices[0], 0xFF0000);
+		for(float iDbg=1.5f; iDbg<2.5f; iDbg+=1.1f)
+		{
+			const Vector4f dbg_vec0 = aVertices[0]* iDbg;
+			const Vector4f dbg_vec1 = aVertices[1]* iDbg;
+			const Vector4f dbg_vec2 = aVertices[2]* iDbg;
+			impl_drawLine(dbg_vec0, dbg_vec1, 0xFF0000);
+			impl_drawLine(dbg_vec1, dbg_vec2, 0xFF0000);
+			impl_drawLine(dbg_vec2, dbg_vec0, 0xFF0000);
+		}
+
+		
 	}
 
 	void Render::impl_setPixel(const Vector4f& aVertice, uint32_t aColor)

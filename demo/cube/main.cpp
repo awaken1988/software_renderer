@@ -3,6 +3,7 @@
 #include <thread>
 #include <condition_variable>
 #include <cmath>
+#include <iterator>
 #include <Eigen/Core>
 #include <Eigen/Geometry> 
 #include <SDL.h>
@@ -57,6 +58,8 @@ int main(int argc, char* argv[])
 
 	NsRenderLib::ThreadPool pool;
 
+	float rotation = 0.0f;
+
 	while ( !quit ) {
 
 		SDL_Event event;
@@ -69,8 +72,10 @@ int main(int argc, char* argv[])
 			case SDL_KEYDOWN:
 				switch (event.key.keysym.sym)
 				{
-				case SDLK_UP:    focaldistance += 0.2f; break;
-				case SDLK_DOWN:  focaldistance -= 0.2f; break;
+				//case SDLK_UP:    focaldistance += 0.2f; break;
+				//case SDLK_DOWN:  focaldistance -= 0.2f; break;
+				case SDLK_UP:    rotation += 0.01f; break;
+				case SDLK_DOWN:  rotation -= 0.01f; break;
 				}
 				break;
 			}
@@ -112,7 +117,7 @@ int main(int argc, char* argv[])
 		{
 			myRenderer.clear(0xFFFFFFFF);
 
-			Eigen::Matrix3f aa = Eigen::AngleAxis<float>((2 * 3.1234f) * (offset), Eigen::Vector3f(1.0f, 1.0f, 1.0f).normalized()).toRotationMatrix();
+			Eigen::Matrix3f aa = Eigen::AngleAxis<float>((2 * 3.1234f) * (rotation), Eigen::Vector3f(1.0f, 1.0f, 1.0f).normalized()).toRotationMatrix();
 			Eigen::Matrix4f rotation;
 			rotation.setIdentity();
 			rotation.block<3, 3>(0, 0) = aa;
@@ -126,7 +131,7 @@ int main(int argc, char* argv[])
 			int tri_idx = 0;
 			for (auto iTriangle : cube_triangles) {
 				for (auto& iEdge : iTriangle) {
-					//iEdge = rotation * iEdge;
+					iEdge = rotation * iEdge;
 					iEdge.z() += 4.0f;	
 
 					//Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, Eigen::DontAlignCols, ", ", ", ", "", "", " << ", ";");
@@ -134,7 +139,11 @@ int main(int argc, char* argv[])
 				}
 
 				auto fun = [iTriangle, tri_idx, &colors, &myRenderer, &draw_opt]() -> void {
-					myRenderer.drawTriangle(iTriangle, draw_opt);
+					auto copy_opt = draw_opt;
+
+					copy_opt.color(colors[tri_idx % std::size(colors)]);
+
+					myRenderer.drawTriangle(iTriangle, copy_opt);
 				};
 
 				if (with_threading)
