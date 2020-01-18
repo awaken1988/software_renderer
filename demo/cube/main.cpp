@@ -82,33 +82,33 @@ int main(int argc, char* argv[])
 		}	
 
 		const auto draw_opt = NsRenderLib::tDrawOptions()
-			.pixel_shader([](NsRenderLib::tPixelShaderData aData) -> uint32_t {
-				auto color = aData.color;
-				uint8_t* color_array = reinterpret_cast<uint8_t*>(&color);
-				const auto angle = aData.normal.dot(Eigen::Vector3f(1.0f, 1.0f, 1.0f).normalized());
+			//.pixel_shader([](NsRenderLib::tPixelShaderData aData) -> uint32_t {
+			//	auto color = aData.color;
+			//	uint8_t* color_array = reinterpret_cast<uint8_t*>(&color);
+			//	const auto angle = aData.normal.dot(Eigen::Vector3f(1.0f, 1.0f, 1.0f).normalized());
 
 
-				//std::cout << aData.projected_pixel.x() << std::endl;
+			//	//std::cout << aData.projected_pixel.x() << std::endl;
 
-				const float x = aData.projected_pixel.x() / aData.width;
-				const float y = aData.projected_pixel.y() / aData.height;
+			//	const float x = aData.projected_pixel.x() / aData.width;
+			//	const float y = aData.projected_pixel.y() / aData.height;
 
 
-				const bool is_invert_x = ((int)std::abs(x / 0.02f)) % 2 == 0;
-				const bool is_invert_y = ((int)std::abs(y / 0.02f)) % 2 == 0;
-				const bool is_invert = is_invert_y ? is_invert_x : !is_invert_x;
+			//	const bool is_invert_x = ((int)std::abs(x / 0.02f)) % 2 == 0;
+			//	const bool is_invert_y = ((int)std::abs(y / 0.02f)) % 2 == 0;
+			//	const bool is_invert = is_invert_y ? is_invert_x : !is_invert_x;
 
-				if (is_invert) {
-					color = 0x111111;
-					//std::cout << std::hex << color << std::endl;
-				}
-				else {
-					color = 0xAAAAAA;
-				}
+			//	if (is_invert) {
+			//		color = 0x111111;
+			//		//std::cout << std::hex << color << std::endl;
+			//	}
+			//	else {
+			//		color = 0xAAAAAA;
+			//	}
 
-				//color_array[0] *= angle;
+			//	//color_array[0] *= angle;
 
-				return color; })
+			//	return color; })
 			.color(0xAFFEE)
 			.fov(NsRenderLib::tFov(focaldistance, Eigen::Vector2f(40, 40 / myRenderer.aspectRatio()), 10.0f))
 			.wireframe(false);
@@ -128,8 +128,16 @@ int main(int argc, char* argv[])
 
 			std::array<uint32_t, 6> colors = { 0xfe4219, 0x85fe19, 0x19fef7, 0x1062fc, 0x535254, 0x070707 };
 
-			int tri_idx = 0;
+			int tri_idx = -1;
 			for (auto iTriangle : cube_triangles) {
+				tri_idx++;
+				//if (!(0 == tri_idx || 4 == tri_idx))
+				//	continue;
+				//if (tri_idx >= 5)
+				//	break;
+
+
+
 				for (auto& iEdge : iTriangle) {
 					iEdge = rotation * iEdge;
 					iEdge.z() += 4.0f;	
@@ -150,10 +158,6 @@ int main(int argc, char* argv[])
 					pool.add(fun);
 				else
 					fun();
-
-				tri_idx++;
-
-				break;
 			}
 
 			if(with_threading)

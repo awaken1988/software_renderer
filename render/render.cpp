@@ -73,49 +73,26 @@ namespace NsRenderLib
 
 	void Render::impl_drawLine(const Vector4f& aVertice0, const Vector4f& aVertice1, uint32_t aColor)
 	{
-		bool isXAxis = true;
+		const float deltaX = fabs( aVertice1.x() - aVertice0.x() );
+		const float deltaY = fabs( aVertice1.y() - aVertice0.y() );
+		const bool step_idx = deltaX > deltaY ? 0 : 1;
+		const Vector4f step = 0 == step_idx ? (aVertice1 - aVertice0) / deltaX : (aVertice1 - aVertice0) / deltaY;
+		const float sign = (aVertice1[step_idx] - aVertice0[step_idx]) < 0.0f ? -1.0f : 1.0f;
 
-		Vector4f point0 = aVertice0;
-		Vector4f point1 = aVertice1;
-		float dX = point1.x() - point0.x();
-		float dY = point1.y() - point0.y();
-		bool isXMain = true;
-
-		if (0.0f == dX && 0.0f == dY) {
-			this->impl_setPixel(point0, aColor);
+		//special case: line is only 1px
+		if (deltaX < 1.0f && deltaY < 1.0f) {
+			this->impl_setPixel(aVertice0, aColor);
 			return;
 		}
-		else if (abs(dX) < abs(dY)) {
-			std::swap(dX, dY);
-			std::swap(point0.x(), point0.y());
-			std::swap(point1.x(), point1.y());
-			isXMain = false;
-		}
 
-		if (point0.x() > point1.x()) {
-			std::swap(point0, point1);
-			dX = -dX;
-		}
+		Vector4f curr_vertice = aVertice0;
+		while(true) {
+			const float curr_delta = aVertice1[step_idx] - curr_vertice[step_idx];
+			if ((curr_delta * sign) < 0.0f)
+				break;
 
-		float error = dX / 2.0f;
-		float ysign = point0.y() < point1.y() ? 1.0f : -1.0f;
-
-		while (point0.x() < point1.x()) {
-			if (isXMain) {
-				this->impl_setPixel(point0, aColor);
-			}
-			else {
-				this->impl_setPixel(Vector4f(point0.y(), point0.x(), point0.z(), 0.0f), aColor);
-			}
-
-			if (error > 0.0f) {
-				point0.x() += 1;
-				error -= abs(dY);
-			}
-			else {
-				point0.y() += 1 * ysign;
-				error += dX;
-			}
+			this->impl_setPixel(curr_vertice, aColor);
+			curr_vertice += step;
 		}
 	}
 
@@ -173,7 +150,7 @@ namespace NsRenderLib
 					idx_min = iIdx;
 			}
 
-			const size_t idx_middle = (0x3 & ~(0x1 << idx_min | 0x1 << idx_max)) / 2;
+			const size_t idx_middle = (0x7 & ~(0x1 << idx_min | 0x1 << idx_max)) / 2;
 
 			return { idx_min,  idx_middle, idx_max };
 		};
@@ -186,7 +163,7 @@ namespace NsRenderLib
 		const uint32_t color = aDrawOptions.m_color.value_or(m_default_color);
 		
 		//get left, middle, right and bottom,middle,top vertiex indices
-		std::array<size_t, 3> lmr = sorted_idx(0);	
+		//std::array<size_t, 3> lmr = sorted_idx(0);	
 		std::array<size_t, 3> bmt = sorted_idx(1);
 		
 		//cut triangle -> cut line have to be x axis aligned
@@ -232,38 +209,33 @@ namespace NsRenderLib
 				continue;
 			}
 
-			const float p0_delta = (iHalfTri.p2[0] - iHalfTri.p0[0]) / delta_y_signed;
-			const float p1_delta = (iHalfTri.p2[0] - iHalfTri.p1[0]) / delta_y_signed;
+			const Vector4f p0_delta = (iHalfTri.p2 - iHalfTri.p0) / delta_y;
+			const Vector4f p1_delta = (iHalfTri.p2 - iHalfTri.p1) / delta_y;
 			Vector4f curr_p0 = iHalfTri.p0;
 			Vector4f curr_p1 = iHalfTri.p1;
 
-			while (curr_p0[1] < iHalfTri.p2[1]) {
+			while ( (iHalfTri.p2[1]-curr_p0[1])*sign > 0.5f  ) {
 				this->impl_drawLine(curr_p0, curr_p1, color);
-
-				curr_p0[1] += sign;
-				curr_p0[0] += p0_delta;
-
-				curr_p1[1] += sign;
-				curr_p1[0] += p1_delta;
+				curr_p0 += p0_delta;
+				curr_p1 += p1_delta;
 			}
 
-			impl_drawLine(iHalfTri.p0, iHalfTri.p1, 0xFF00);
-			impl_drawLine(iHalfTri.p1, iHalfTri.p2, 0xFF00);
-			impl_drawLine(iHalfTri.p2, iHalfTri.p0, 0xFF00);
+			//for debug: todo make flags for that
+			//impl_drawLine(iHalfTri.p0, iHalfTri.p1, 0xFF00);
+			//impl_drawLine(iHalfTri.p1, iHalfTri.p2, 0xFF00);
+			//impl_drawLine(iHalfTri.p2, iHalfTri.p0, 0xFF00);
 		}
 
 		//for debug
-		for(float iDbg=1.5f; iDbg<2.5f; iDbg+=1.1f)
-		{
-			const Vector4f dbg_vec0 = aVertices[0]* iDbg;
-			const Vector4f dbg_vec1 = aVertices[1]* iDbg;
-			const Vector4f dbg_vec2 = aVertices[2]* iDbg;
-			impl_drawLine(dbg_vec0, dbg_vec1, 0xFF0000);
-			impl_drawLine(dbg_vec1, dbg_vec2, 0xFF0000);
-			impl_drawLine(dbg_vec2, dbg_vec0, 0xFF0000);
-		}
-
-		
+		//for(float iDbg=1.5f; iDbg<2.5f; iDbg+=1.1f)
+		//{
+		//	const Vector4f dbg_vec0 = aVertices[0]* iDbg;
+		//	const Vector4f dbg_vec1 = aVertices[1]* iDbg;
+		//	const Vector4f dbg_vec2 = aVertices[2]* iDbg;
+		//	impl_drawLine(dbg_vec0, dbg_vec1, 0xFF0000);
+		//	impl_drawLine(dbg_vec1, dbg_vec2, 0xFF0000);
+		//	impl_drawLine(dbg_vec2, dbg_vec0, 0xFF0000);
+		//}
 	}
 
 	void Render::impl_setPixel(const Vector4f& aVertice, uint32_t aColor)
@@ -421,7 +393,7 @@ namespace NsRenderLib
 			const auto fixed = std::get<2>(iWalk);
 
 			for (int iSide = 0; iSide < 2; iSide++) {
-				for (int iEdge = 0; iEdge < 4; iEdge++) {
+				for (int iEdge = 0; iEdge < 4; iEdge+=2) {
 					const auto p0 = rectangle_fun(iEdge + 0, walk0, walk1, fixed, iSide);
 					const auto p1 = rectangle_fun(iEdge + 1, walk0, walk1, fixed, iSide);
 					const auto p2 = rectangle_fun(iEdge + 2, walk0, walk1, fixed, iSide);
