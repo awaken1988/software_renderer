@@ -11,6 +11,7 @@
 #include <chrono>
 #include <render.h>
 #include <render_threading.h>
+#include "../sdl2_helper.h"
 
 int reterr(int aRet, std::string aMsg)
 {
@@ -20,201 +21,130 @@ int reterr(int aRet, std::string aMsg)
 
 int main(int argc, char* argv[])
 {
-	// Initialize SDL with video
-	SDL_Init(SDL_INIT_VIDEO);
+	constexpr size_t screen_width = 1024;
+	constexpr size_t screen_height = 768;
 
-	// Create an SDL window
-	SDL_Window* window = SDL_CreateWindow("Test", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_OPENGL);
-	if (!window) {
-		return reterr(1, "Error failed to create window!");
-	}
-
-	// Create an OpenGL context (so we can use OpenGL functions)
-	SDL_GLContext context = SDL_GL_CreateContext(window);
-	if (!context) {
-		return reterr(2, "Error failed to create a context!");
-	}
-
-	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
-	if (!renderer) {
-		return reterr(3, "Could not create renderer");
-	}
-
-	SDL_Texture* buffer = SDL_CreateTexture(renderer,
-		SDL_PIXELFORMAT_ARGB8888,
-		SDL_TEXTUREACCESS_STATIC,
-		640,
-		480);
-
-	bool quit = false;
-	int frame = 0;
-	int offset = 1;
-
-	auto framecounter_time = std::chrono::steady_clock::now();
-	auto update_time = std::chrono::steady_clock::now();
-	NsRenderLib::Render myRenderer(640, 480, 4);
-	float focaldistance = 8.0f;
-	constexpr bool with_threading = false;
-
-	NsRenderLib::ThreadPool pool;
-
+	bool with_threading = false;
+	float focaldistance = 16.0f;
 	float rotation = 0.0f;
+	NsRenderLib::ThreadPool pool;
+	const auto cube_triangles = NsRenderLib::generate_cube_lines();
+	const std::array<uint32_t, 6> colors = { 0xfe4219, 0x85fe19, 0x19fef7, 0x1062fc, 0x535254, 0x070707 };
+	NsRenderLib::Render myRenderer(screen_width, screen_height, 4);
+	const int max_rows = 4;
+	const int max_cols = 4;
 
-	while ( !quit ) {
 
+	//we create different render optiop
+		//Thus:
+		//	- Camera Settings
+		//	- PixelShader
+		//	- other options: like additional wireframe
+	const auto fov = NsRenderLib::tFov(focaldistance, Eigen::Vector2f(40, 40 / myRenderer.aspectRatio()), 40.0f);
+
+	const auto drawopt_normal = NsRenderLib::tDrawOptions()
+		.color(0xAFFEE)
+		.fov(fov)
+		.wireframe(false);
+
+	const auto drawopt_depth_wireframe = NsRenderLib::tDrawOptions()
+		.color(0xAFFEE)
+		.fov(fov)
+		.wireframe(true);
+
+	const auto drawopt_depth_color = NsRenderLib::tDrawOptions()
+		.color(0xAFFEE)
+		.fov(fov)
+		.pixel_shader([](NsRenderLib::tPixelShaderData aData) -> uint32_t {
+			return 0x00112233;
+		});
+
+	std::vector<NsRenderLib::tDrawOptions> draw_options = { drawopt_normal, drawopt_depth_wireframe, drawopt_depth_color };
+
+	render_helper::start_sdl2_loop(screen_width, screen_height, [&](SDL_Window* window, SDL_GLContext& context, SDL_Renderer* renderer, SDL_Texture* buffer) {
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
 			switch (event.type)
 			{
 			case SDL_QUIT:
-				quit = true;
-				break;
+				return 1;
 			case SDL_KEYDOWN:
 				switch (event.key.keysym.sym)
 				{
-				//case SDLK_UP:    focaldistance += 0.2f; break;
-				//case SDLK_DOWN:  focaldistance -= 0.2f; break;
-				case SDLK_UP:    rotation += 0.01f; break;
-				case SDLK_DOWN:  rotation -= 0.01f; break;
+					//case SDLK_UP:    focaldistance += 0.2f; break;
+					//case SDLK_DOWN:  focaldistance -= 0.2f; break;
+				case SDLK_UP:    
+					rotation += 0.01f; 
+					break;
+				case SDLK_DOWN:  
+					rotation -= 0.01f; 
+					break;
 				}
 				break;
 			}
-		}	
+		}
 
-		const auto draw_opt = NsRenderLib::tDrawOptions()
-			//.pixel_shader([](NsRenderLib::tPixelShaderData aData) -> uint32_t {
-			//	auto color = aData.color;
-			//	uint8_t* color_array = reinterpret_cast<uint8_t*>(&color);
-			//	const auto angle = aData.normal.dot(Eigen::Vector3f(1.0f, 1.0f, 1.0f).normalized());
-
-
-			//	//std::cout << aData.projected_pixel.x() << std::endl;
-
-			//	const float x = aData.projected_pixel.x() / aData.width;
-			//	const float y = aData.projected_pixel.y() / aData.height;
-
-
-			//	const bool is_invert_x = ((int)std::abs(x / 0.02f)) % 2 == 0;
-			//	const bool is_invert_y = ((int)std::abs(y / 0.02f)) % 2 == 0;
-			//	const bool is_invert = is_invert_y ? is_invert_x : !is_invert_x;
-
-			//	if (is_invert) {
-			//		color = 0x111111;
-			//		//std::cout << std::hex << color << std::endl;
-			//	}
-			//	else {
-			//		color = 0xAAAAAA;
-			//	}
-
-			//	//color_array[0] *= angle;
-
-			//	return color; })
-			.color(0xAFFEE)
-			.fov(NsRenderLib::tFov(focaldistance, Eigen::Vector2f(40, 40 / myRenderer.aspectRatio()), 10.0f))
-			.wireframe(false);
-
+		
 		//render stuff
 		{
 			myRenderer.clear(0xFFFFFFFF);
 
-			Eigen::Matrix3f aa = Eigen::AngleAxis<float>((2 * 3.1234f) * (rotation), Eigen::Vector3f(1.0f, 1.0f, 1.0f).normalized()).toRotationMatrix();
-			Eigen::Matrix4f rotation;
-			rotation.setIdentity();
-			rotation.block<3, 3>(0, 0) = aa;
-			
-			//std::cout << rotation << std::endl;
+			for (int iRow = 0; iRow < max_rows; iRow++) {
+				for (int iCol = 0; iCol < max_cols; iCol++) {
+					const int col_row_idx = iCol + (max_cols * iRow);
 
-			auto cube_triangles = NsRenderLib::generate_cube_lines();
+					auto curr_draw_opt = draw_options[col_row_idx % (draw_options.size())];
 
-			std::array<uint32_t, 6> colors = { 0xfe4219, 0x85fe19, 0x19fef7, 0x1062fc, 0x535254, 0x070707 };
+					int tri_idx = 0;
+					for (auto iTriangle : cube_triangles) {
+						Eigen::Matrix3f aa = Eigen::AngleAxis<float>((2 * 3.1234f) * (rotation), Eigen::Vector3f(1.0f, 1.0f, 1.0f).normalized()).toRotationMatrix();
+						Eigen::Matrix4f rotation_matrix;
+						rotation_matrix.setIdentity();
+						rotation_matrix.block<3, 3>(0, 0) = aa;
 
-			int tri_idx = -1;
-			for (auto iTriangle : cube_triangles) {
-				tri_idx++;
-				//if (!(0 == tri_idx || 4 == tri_idx))
-				//	continue;
-				//if (tri_idx >= 5)
-				//	break;
+						const float translation_x = iCol * 4.0f - (max_cols*1.5f);
+						const float translation_y = iRow * 4.0f - (max_rows * 1.5f);
+						Eigen::Matrix4f translation_matrix = Eigen::Matrix4f::Identity();
+						translation_matrix.col(3).head<3>() << translation_x, translation_y, 8.0f;
 
+						const Eigen::Matrix4f world_matrix = translation_matrix * rotation_matrix;
 
+						auto fun = [iTriangle, world_matrix, tri_idx, &colors, &myRenderer, &curr_draw_opt]() -> void {
+							auto copy_opt = curr_draw_opt;
+							copy_opt.color(colors[tri_idx % std::size(colors)]);
 
-				for (auto& iEdge : iTriangle) {
-					iEdge = rotation * iEdge;
-					iEdge.z() += 4.0f;	
+							auto curr_triangle = iTriangle;
 
-					//Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, Eigen::DontAlignCols, ", ", ", ", "", "", " << ", ";");
-					//std::cout << iEdge.format(CommaInitFmt) << std::endl;
+							for (auto& iEdge : curr_triangle) {
+								iEdge = world_matrix * iEdge;
+								//iEdge[2] += 4.0f;
+							}
+
+							myRenderer.drawTriangle(curr_triangle, copy_opt);
+						};
+
+						if (with_threading)
+							pool.add(fun);
+						else
+							fun();
+
+						tri_idx++;
+					}
+
+					if (with_threading)
+						pool.join();
 				}
-
-				auto fun = [iTriangle, tri_idx, &colors, &myRenderer, &draw_opt]() -> void {
-					auto copy_opt = draw_opt;
-
-					copy_opt.color(colors[tri_idx % std::size(colors)]);
-
-					myRenderer.drawTriangle(iTriangle, copy_opt);
-				};
-
-				if (with_threading)
-					pool.add(fun);
-				else
-					fun();
 			}
 
-			if(with_threading)
-				pool.join();
-
 			void* buff = myRenderer.getBuffer();
-
-			
-
-			SDL_UpdateTexture(buffer, NULL, myRenderer.getBuffer(), 640 * sizeof(Uint32));
-
+			SDL_UpdateTexture(buffer, NULL, myRenderer.getBuffer(), screen_width * sizeof(Uint32));
 			SDL_RenderClear(renderer);
 			SDL_RenderCopy(renderer, buffer, NULL, NULL);
 			SDL_RenderPresent(renderer);
-
-			
+	
+			return 0;
 		}
-
-		frame++;
-		const auto end_time = std::chrono::steady_clock::now();
-		//frametime
-		{
-			auto diff_time = end_time - framecounter_time;
-			auto diff_time_sec = std::chrono::duration<double, std::milli>(diff_time).count();
-
-			if (diff_time_sec > 1000.0) {
-				std::string caption = std::to_string(frame) + " Frames";
-				SDL_SetWindowTitle(window, caption.c_str());
-				frame = 0;
-
-				framecounter_time = std::chrono::steady_clock::now();
-
-				
-			}
-		}
-
-		//updatetime
-		{
-			auto diff_time = end_time - update_time;
-			auto diff_time_sec = std::chrono::duration<double, std::milli>(diff_time).count();
-
-			if (diff_time_sec > 10.0) {
-				offset += 1;
-				update_time = std::chrono::steady_clock::now();
-			}
-		}
-	}
-
-
-	// Destroy the context
-	SDL_GL_DeleteContext(context);
-
-	// Destroy the window
-	SDL_DestroyWindow(window);
-
-	// And quit SDL
-	SDL_Quit();
+	});
 
 	return 0;
 }

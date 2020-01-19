@@ -65,6 +65,7 @@ namespace NsRenderLib
 
 	void Render::clear(uint32_t aColor)
 	{
+		//TODO:make faster clear
 		foreachPixel([&](uint32_t aX, uint32_t aY) {
 			m_buffer.color[getPixelIndex(aX, aY)] = aColor;
 			m_buffer.depth[getPixelIndex(aX, aY)] = 1.0f;
@@ -159,8 +160,6 @@ namespace NsRenderLib
 			Vector4f p0, p1, p2;
 			bool is_valid=false;
 		};
-
-		const uint32_t color = aDrawOptions.m_color.value_or(m_default_color);
 		
 		//get left, middle, right and bottom,middle,top vertiex indices
 		//std::array<size_t, 3> lmr = sorted_idx(0);	
@@ -183,8 +182,14 @@ namespace NsRenderLib
 			else {
 				const Vector4f bottom_top = top - bottom;
 				const float bottom_mult = (middle[1] - bottom[1]) / bottom_top[1];
-				const Vector4f other_middle = bottom + bottom_top * bottom_mult;
+				Vector4f other_middle = bottom + bottom_top * bottom_mult;
 				
+				if (0.0f == bottom_top[1]) {
+					return ret;
+				};
+
+				other_middle[1] = middle[1];
+
 				ret[0] = { middle, other_middle, top, true };
 				ret[1] = { middle, other_middle, bottom, true };
 			}
@@ -205,7 +210,7 @@ namespace NsRenderLib
 
 			//for flatten triangle
 			if ( delta_y < 0.5f ) {
-				this->impl_drawLine(iHalfTri.p0, iHalfTri.p1, color);
+				this->impl_drawLine(iHalfTri.p0, iHalfTri.p1, m_default_color);	//FIXME
 				continue;
 			}
 
@@ -215,6 +220,13 @@ namespace NsRenderLib
 			Vector4f curr_p1 = iHalfTri.p1;
 
 			while ( (iHalfTri.p2[1]-curr_p0[1])*sign > 0.5f  ) {
+
+				uint32_t color = aDrawOptions.m_color.value_or(m_default_color);
+
+				if (aDrawOptions.m_pixelshader.has_value()) {
+					color = aDrawOptions.m_pixelshader.value()(tPixelShaderData(color, Vector3f(), Vector2f(), m_width, m_height)); //TODO: creater proper normal, pixelcoord
+				}
+
 				this->impl_drawLine(curr_p0, curr_p1, color);
 				curr_p0 += p0_delta;
 				curr_p1 += p1_delta;
@@ -279,10 +291,10 @@ namespace NsRenderLib
 			0.0f);
 
 		//clip x/y
-		if (abs(aPoint.x()) > (currFov.near_plane.x() / 2.0f))
-			return false;
-		if (abs(aPoint.y()) > (currFov.near_plane.y() / 2.0f))
-			return false;
+		//if (abs(aPoint.x()) > (currFov.near_plane.x() / 2.0f))
+		//	return false;
+		//if (abs(aPoint.y()) > (currFov.near_plane.y() / 2.0f))
+		//	return false;
 
 		aPoint.z() = (1.0f * aPoint.z()) / currFov.far_distance;
 
@@ -382,7 +394,7 @@ namespace NsRenderLib
 			edge[aWalk0] = (value[iEdge%5] & 0x1) ? 1.0f : -1.0f;
 			edge[aWalk1] = (value[iEdge%5] & 0x2) ? 1.0f : -1.0f;
 			edge[aFixed] = aIsFront ? 1.0f : -1.0f;
-			edge[3] = 0.0f;
+			edge[3] = 1.0f;
 
 			return edge;
 		};

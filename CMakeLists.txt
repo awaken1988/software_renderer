@@ -10,6 +10,7 @@ include_directories(render/include)
 include_directories(render/include)
 include_directories(extern/eigen3)
 
+set(RENDER_H render/include/render.h render/include/render_threading.h)
 
 #extern SDL library
 include_directories(extern/SDL2/include)
@@ -17,17 +18,19 @@ include_directories(extern/SDL2/include)
 #set_target_properties(SDL2 PROPERTIES IMPORTED_LOCATION "./extern/SDL2-2.0.10/lib")
 
 #render library
-add_library(render STATIC render/render.cpp render/render_threading.cpp)	
+add_library(render STATIC render/render.cpp render/render_threading.cpp ${RENDER_H} )
+target_include_directories(render PRIVATE render/include)
 target_compile_definitions(render PRIVATE RENDER_EXPORT)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 #Test Cube
-add_executable(demo_cube demo/cube/main.cpp)
+add_executable(demo_cube demo/cube/main.cpp ${RENDER_H} demo/sdl2_helper.h)
 target_link_libraries(demo_cube PUBLIC render)
 target_link_options(demo_cube PUBLIC SDL2.lib SDL2main.lib OpenGL32.lib /LIBPATH:${CMAKE_SOURCE_DIR}/extern/SDL2/lib/x64)
 target_link_options(demo_cube PUBLIC /LIBPATH:${CMAKE_SOURCE_DIR}/extern/SDL2/lib/x64)
+target_include_directories(demo_cube PUBLIC render/include demo_cube )
 
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/Debug)
 file(COPY ${CMAKE_SOURCE_DIR}/extern/SDL2/lib/x64/SDL2.dll DESTINATION ${CMAKE_BINARY_DIR}/Debug/)
