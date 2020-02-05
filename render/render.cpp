@@ -1,6 +1,6 @@
 #include "render.h"
 
-namespace NsRenderLib
+namespace SoftRender
 {
 	//---------------------------------------------------------
 	// DrawOption
@@ -31,6 +31,12 @@ namespace NsRenderLib
 	tDrawOptions& tDrawOptions::wireframe(bool aWireframe)
 	{
 		m_wireframe = aWireframe;
+		return *this;
+	}
+
+	tDrawOptions& tDrawOptions::rasterizer(eRasterizer aRasterizer)
+	{
+		m_rasterizer = aRasterizer;
 		return *this;
 	}
 
@@ -95,6 +101,15 @@ namespace NsRenderLib
 			this->impl_setPixel(curr_vertice, aColor);
 			curr_vertice += step;
 		}
+	}
+
+	void Render::impl_drawTriangleFilled(const Vector4f* aVertices, const tDrawOptions& aDrawOptions)
+	{
+		switch (aDrawOptions.m_rasterizer)
+		{
+		case eRasterizer::BARYCETIC:		return impl_drawTriangleFilled_barycentric(aVertices, aDrawOptions);
+		case eRasterizer::BRESEHAM_LIKE:	return impl_drawTriangleFilled_breseham_like(aVertices, aDrawOptions);
+		};
 	}
 
 	void Render::impl_drawTriangleFilled_barycentric(const Vector4f* aVertices, const tDrawOptions& aDrawOptions)

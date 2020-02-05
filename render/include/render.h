@@ -12,7 +12,7 @@
 #include <Eigen/Geometry>
 #include "render_threading.h"
 
-namespace NsRenderLib
+namespace SoftRender
 {
 	using namespace Eigen;
 	using namespace std;
@@ -52,6 +52,11 @@ namespace NsRenderLib
 
 	typedef std::function < uint32_t(tPixelShaderData)> funcPixelShader;
 
+	enum class eRasterizer {
+		BARYCETIC,
+		BRESEHAM_LIKE,
+	};
+
 	//Option each Draw function accept
 	struct tDrawOptions
 	{
@@ -60,11 +65,13 @@ namespace NsRenderLib
 		tDrawOptions& color(uint32_t aColor);
 		tDrawOptions& fov(tFov aFov);
 		tDrawOptions& wireframe(bool aWireframe);
+		tDrawOptions& rasterizer(eRasterizer aRasterizer);
 
 		optional<funcPixelShader> m_pixelshader;
 		optional<uint32_t> m_color;
 		optional<tFov> m_fov;
 		bool m_wireframe = false;
+		eRasterizer m_rasterizer = eRasterizer::BRESEHAM_LIKE;
 	};
 
 	class Render
@@ -86,11 +93,7 @@ namespace NsRenderLib
 		float aspectRatio();
 
 	protected:
-		//stub
-		void impl_drawTriangleFilled(const Vector4f* aVertices, const tDrawOptions& aDrawOptions) {
-			//impl_drawTriangleFilled_barycentric(aVertices, aDrawOptions);
-			impl_drawTriangleFilled_breseham_like(aVertices, aDrawOptions);
-		}
+		void impl_drawTriangleFilled(const Vector4f* aVertices, const tDrawOptions& aDrawOptions);
 		void impl_drawTriangleFilled_barycentric(const Vector4f* aVertices, const tDrawOptions& aDrawOptions);
 		void impl_drawTriangleFilled_breseham_like(const Vector4f* aVertices, const tDrawOptions& aDrawOptions);
 		void impl_setPixel(const Vector4f& aVertice, uint32_t aColor);

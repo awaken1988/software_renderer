@@ -7,7 +7,7 @@
 #include <mutex>
 #include <iostream>
 
-namespace NsRenderLib
+namespace SoftRender
 {
 	using namespace std;
 

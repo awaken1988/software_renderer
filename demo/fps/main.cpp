@@ -19,12 +19,25 @@ int reterr(int aRet, std::string aMsg)
 	return aRet;
 }
 
+const char* map[] = {
+	"................................................................",
+	"................................................................",
+	"...........................####.................................",
+	"....................#................#..........................",
+	"....................#................#..........................",
+	"....................#................#..........................",
+	"....................######......######..........................",
+	"................................................................",
+	"....................######.....#######..........................",
+	".........................#..s..#................................",
+};
+
 int main(int argc, char* argv[])
 {
 	constexpr size_t screen_width = 1024;
 	constexpr size_t screen_height = 768;
 
-	bool with_threading = true;
+	bool with_threading = false;
 	float focaldistance = 16.0f;
 	float rotation = 0.0f;
 	SoftRender::ThreadPool pool;
@@ -46,18 +59,6 @@ int main(int argc, char* argv[])
 		.color(0xAFFEE)
 		.fov(fov)
 		.wireframe(false);
-
-	const auto drawopt_depth_wireframe = SoftRender::tDrawOptions()
-		.color(0xAFFEE)
-		.fov(fov)
-		.wireframe(true);
-
-	const auto drawopt_depth_color = SoftRender::tDrawOptions()
-		.color(0xAFFEE)
-		.fov(fov)
-		.pixel_shader([](SoftRender::tPixelShaderData aData) -> uint32_t {
-			return 0x00112233;
-		});
 
 	std::vector<SoftRender::tDrawOptions> draw_options = { drawopt_normal, drawopt_depth_wireframe, drawopt_depth_color };
 

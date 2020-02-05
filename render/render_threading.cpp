@@ -1,6 +1,6 @@
 #include "render_threading.h"
 
-NsRenderLib::ThreadPool::ThreadPool()
+SoftRender::ThreadPool::ThreadPool()
 {
 	m_max_threads = std::thread::hardware_concurrency();
 	if (m_max_threads < 1)
@@ -53,7 +53,7 @@ NsRenderLib::ThreadPool::ThreadPool()
 	});
 }
 
-NsRenderLib::ThreadPool::~ThreadPool()
+SoftRender::ThreadPool::~ThreadPool()
 {
 	join();
 
@@ -73,7 +73,7 @@ NsRenderLib::ThreadPool::~ThreadPool()
 	}
 }
 
-void NsRenderLib::ThreadPool::add(std::function<void()> aFunction)
+void SoftRender::ThreadPool::add(std::function<void()> aFunction)
 {
 	int idx = 0;
 	auto check_fun = [this, &idx]() {
@@ -93,7 +93,7 @@ void NsRenderLib::ThreadPool::add(std::function<void()> aFunction)
 	m_cond_start.notify_all();
 }
 
-void NsRenderLib::ThreadPool::join()
+void SoftRender::ThreadPool::join()
 {
 	auto check_fun = [this]() {
 		for (int i=0; i < m_max_threads; i++) {
