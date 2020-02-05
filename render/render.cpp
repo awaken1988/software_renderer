@@ -3,6 +3,22 @@
 namespace SoftRender
 {
 	//---------------------------------------------------------
+	// helper
+	//---------------------------------------------------------
+	template<typename T_FUNC>
+	void pixel_lock(std::atomic<bool>& aLock, T_FUNC& aFunc) {
+		//Reference: https://stackoverflow.com/questions/15056237/which-is-more-efficient-basic-mutex-lock-or-atomic-integer
+		
+		while (aLock.exchange(true, std::memory_order_relaxed));
+		std::atomic_thread_fence(std::memory_order_acquire);
+
+		aFunc();
+		
+		std::atomic_thread_fence(std::memory_order_release);
+		aLock.store(false, std::memory_order_relaxed);
+	}
+
+	//---------------------------------------------------------
 	// DrawOption
 	//---------------------------------------------------------
 	tDrawOptions::tDrawOptions()
@@ -50,14 +66,26 @@ namespace SoftRender
 			m_default_color((~aColorBytes)&0x00FFFFFF),
 			m_default_fov(8.0f, Eigen::Vector2f(40, 40 / this->aspectRatio()), 10.0f)
 	{
-		m_buffer.color.resize(m_width * m_height * m_color_bytes);
-		m_buffer.depth.resize(m_width * m_height * sizeof(float));
+
+		m_buffer.color.resize( this->pixelCount() * m_color_bytes );
+		m_buffer.depth.resize( this->pixelCount() * sizeof(float) );
 		
-		for (int iPixel = 0; iPixel < m_width * m_height; iPixel++) {
-			m_buffer.mutex.push_back( new mutex );
+		//placement new for atomic<bool>
+		m_buffer.mutex = reinterpret_cast<std::atomic<bool>*>( operator new( this->pixelCount() * sizeof(std::atomic<bool>) ) );
+		for (uint32_t iMutex = 0; iMutex < this->pixelCount(); iMutex++) {
+			new (&m_buffer.mutex[iMutex]) std::atomic<bool>();
 		}
 
 		clear();
+	}
+
+	Render::~Render()
+	{
+		for (uint32_t iMutex = 0; iMutex < this->pixelCount(); iMutex++) {
+			//TODO placement delete(&m_buffer.mutex[iMutex])->~std::atomic<bool>();
+		}
+
+		operator delete(m_buffer.mutex);
 	}
 
 	void Render::foreachPixel(std::function<void(uint32_t, uint32_t)> aFunc)
@@ -275,12 +303,17 @@ namespace SoftRender
 		const auto y = static_cast<size_t>(aVertice.y());
 		const auto idx = getPixelIndex(x, y);
 
-		m_buffer.mutex[idx]->lock();
-		if (depth <= m_buffer.depth[idx]) {
-			m_buffer.color[idx] = aColor  ;
-			m_buffer.depth[idx] = depth;
+		//prevent lock()
+		if (depth >= m_buffer.depth[idx]) {
+			return;
 		}
-		m_buffer.mutex[idx]->unlock();
+
+		pixel_lock(m_buffer.mutex[idx], [&]() {
+			if (depth <= m_buffer.depth[idx]) {
+				m_buffer.color[idx] = aColor;
+				m_buffer.depth[idx] = depth;
+			}
+		});
 	}
 
 	uint32_t Render::getPixelIndex(uint32_t aX, uint32_t aY)
@@ -385,6 +418,11 @@ namespace SoftRender
 	uint32_t Render::height()
 	{
 		return m_height;
+	}
+
+	uint32_t Render::pixelCount() const
+	{
+		return this->m_width * this->m_height;
 	}
 
 	float Render::aspectRatio()

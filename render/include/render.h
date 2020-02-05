@@ -8,6 +8,7 @@
 #include <array>
 #include <thread>
 #include <limits>
+#include <atomic>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include "render_threading.h"
@@ -78,6 +79,7 @@ namespace SoftRender
 	{
 	public:
 		Render(uint32_t aWidth, uint32_t aHeight, uint32_t aColorBytes);
+		~Render();
 
 		void drawTriangle(vector<Vector4f> aVertices, const tDrawOptions& aDrawOptions);
 		void drawTriangle(array<Vector4f, 3> aVertices, const tDrawOptions& aDrawOptions);
@@ -90,7 +92,10 @@ namespace SoftRender
 		//misc info
 		uint32_t width();
 		uint32_t height();
+		uint32_t pixelCount() const;
 		float aspectRatio();
+
+
 
 	protected:
 		void impl_drawTriangleFilled(const Vector4f* aVertices, const tDrawOptions& aDrawOptions);
@@ -98,8 +103,7 @@ namespace SoftRender
 		void impl_drawTriangleFilled_breseham_like(const Vector4f* aVertices, const tDrawOptions& aDrawOptions);
 		void impl_setPixel(const Vector4f& aVertice, uint32_t aColor);
 		void impl_drawLine(const Vector4f& aVertice0, const Vector4f& aVertice1, uint32_t aColor);
-
-
+		
 	protected:
 		uint32_t getPixelIndex(uint32_t aX, uint32_t aY);
 		bool projectPoint(Vector4f& aPoint, const tDrawOptions& aDrawOptions);
@@ -115,7 +119,7 @@ namespace SoftRender
 		struct tRenderBuffer {
 			std::vector<uint32_t> color;
 			std::vector<float> depth;
-			std::vector<mutex*> mutex;
+			std::atomic<bool>* mutex;
 		} m_buffer;
 
 		//Defaults
