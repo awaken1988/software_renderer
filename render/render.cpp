@@ -64,28 +64,33 @@ namespace SoftRender
 		:	m_width(aWidth), m_height(aHeight), 
 			m_color_bytes(aColorBytes), 
 			m_default_color((~aColorBytes)&0x00FFFFFF),
-			m_default_fov(8.0f, Eigen::Vector2f(40, 40 / this->aspectRatio()), 10.0f)
+			m_default_fov(8.0f, Eigen::Vector2f(40, 40 / this->aspectRatio()), 10.0f),
+			m_buff_idx(0)
 	{
+		for (auto& iBuff : m_buffers) {
+			iBuff.color.resize(this->pixelCount() * m_color_bytes);
+			iBuff.depth.resize(this->pixelCount() * sizeof(float));
 
-		m_buffer.color.resize( this->pixelCount() * m_color_bytes );
-		m_buffer.depth.resize( this->pixelCount() * sizeof(float) );
-		
-		//placement new for atomic<bool>
-		m_buffer.mutex = reinterpret_cast<std::atomic<bool>*>( operator new( this->pixelCount() * sizeof(std::atomic<bool>) ) );
-		for (uint32_t iMutex = 0; iMutex < this->pixelCount(); iMutex++) {
-			new (&m_buffer.mutex[iMutex]) std::atomic<bool>();
+			//placement new for atomic<bool>
+			iBuff.mutex = reinterpret_cast<std::atomic<bool>*>(operator new(this->pixelCount() * sizeof(std::atomic<bool>)));
+			for (uint32_t iMutex = 0; iMutex < this->pixelCount(); iMutex++) {
+				new (&iBuff.mutex[iMutex]) std::atomic<bool>();
+			}
+
+			impl_clear(m_default_color, iBuff, false);
 		}
-
-		clear();
 	}
 
 	Render::~Render()
 	{
-		for (uint32_t iMutex = 0; iMutex < this->pixelCount(); iMutex++) {
-			//TODO placement delete(&m_buffer.mutex[iMutex])->~std::atomic<bool>();
-		}
+		m_pool.join();
 
-		operator delete(m_buffer.mutex);
+		for (auto& iBuff : m_buffers) {
+			for (uint32_t iMutex = 0; iMutex < this->pixelCount(); iMutex++) {
+				//TODO placement delete(&m_buffer.mutex[iMutex])->~std::atomic<bool>();
+			}
+			operator delete(iBuff.mutex);
+		}
 	}
 
 	void Render::foreachPixel(std::function<void(uint32_t, uint32_t)> aFunc)
@@ -97,13 +102,17 @@ namespace SoftRender
 		}
 	}
 
-	void Render::clear(uint32_t aColor)
+	void Render::swap_buffer()
 	{
-		//TODO:make faster clear
-		foreachPixel([&](uint32_t aX, uint32_t aY) {
-			m_buffer.color[getPixelIndex(aX, aY)] = aColor;
-			m_buffer.depth[getPixelIndex(aX, aY)] = 1.0f;
-		});
+		impl_clear(m_default_color, buff(), true);
+
+		m_buff_idx++;
+		if (m_buff_idx >= m_buffers.size()) {
+			m_buff_idx = 0;
+		}
+
+		while( !buff().is_cleared );
+		m_pool.join();
 	}
 
 	void Render::impl_drawLine(const Vector4f& aVertice0, const Vector4f& aVertice1, uint32_t aColor)
@@ -128,6 +137,26 @@ namespace SoftRender
 
 			this->impl_setPixel(curr_vertice, aColor);
 			curr_vertice += step;
+		}
+	}
+
+	void Render::impl_clear(uint32_t aColor, tRenderBuffer& aBuffer, bool aBackground)
+	{
+		m_buffers[m_buff_idx].is_cleared = false;
+
+		auto clear_func = [this, aColor, &aBuffer]() {
+			foreachPixel([&](uint32_t aX, uint32_t aY) {
+				aBuffer.color[getPixelIndex(aX, aY)] = aColor;
+				aBuffer.depth[getPixelIndex(aX, aY)] = 1.0f;
+				});
+			m_buffers[m_buff_idx].is_cleared = true;
+		};
+
+		if (aBackground) {
+			m_pool.add([clear_func]() {clear_func(); });
+		}
+		else {
+			clear_func();
 		}
 	}
 
@@ -304,14 +333,14 @@ namespace SoftRender
 		const auto idx = getPixelIndex(x, y);
 
 		//prevent lock()
-		if (depth >= m_buffer.depth[idx]) {
+		if (depth >= buff().depth[idx]) {
 			return;
 		}
 
-		pixel_lock(m_buffer.mutex[idx], [&]() {
-			if (depth <= m_buffer.depth[idx]) {
-				m_buffer.color[idx] = aColor;
-				m_buffer.depth[idx] = depth;
+		pixel_lock(buff().mutex[idx], [&]() {
+			if (depth <= buff().depth[idx]) {
+				buff().color[idx] = aColor;
+				buff().depth[idx] = depth;
 			}
 		});
 	}
@@ -367,9 +396,14 @@ namespace SoftRender
 		return (1.0f * aZ) / m_default_fov.far_distance;
 	}
 
+	inline Render::tRenderBuffer& Render::buff()
+	{
+		return m_buffers[m_buff_idx];
+	}
+
 	void* Render::getBuffer()
 	{
-		return reinterpret_cast<void*>(m_buffer.color.data());
+		return reinterpret_cast<void*>(buff().color.data());
 	}
 
 	void Render::drawTriangle(vector<Vector4f> aVertices, const tDrawOptions& aDrawOptions)

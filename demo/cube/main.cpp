@@ -87,7 +87,8 @@ int main(int argc, char* argv[])
 		
 		//render stuff
 		{
-			myRenderer.clear(0xFFFFFFFF);
+			//myRenderer.clear(0xFFFFFFFF);
+			myRenderer.swap_buffer();
 
 			for (int iRow = 0; iRow < max_rows; iRow++) {
 				for (int iCol = 0; iCol < max_cols; iCol++) {

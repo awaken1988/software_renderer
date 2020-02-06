@@ -86,7 +86,7 @@ namespace SoftRender
 		void drawTriangle(Vector4f* aVertices, const tDrawOptions& aDrawOptions);
 
 		void foreachPixel(std::function<void(uint32_t, uint32_t)> aFunc);
-		void clear(uint32_t aColor = 0xFFFFFFFF);
+		void swap_buffer();
 		void* getBuffer();
 
 		//misc info
@@ -95,37 +95,45 @@ namespace SoftRender
 		uint32_t pixelCount() const;
 		float aspectRatio();
 
-
-
-	protected:
-		void impl_drawTriangleFilled(const Vector4f* aVertices, const tDrawOptions& aDrawOptions);
-		void impl_drawTriangleFilled_barycentric(const Vector4f* aVertices, const tDrawOptions& aDrawOptions);
-		void impl_drawTriangleFilled_breseham_like(const Vector4f* aVertices, const tDrawOptions& aDrawOptions);
-		void impl_setPixel(const Vector4f& aVertice, uint32_t aColor);
-		void impl_drawLine(const Vector4f& aVertice0, const Vector4f& aVertice1, uint32_t aColor);
-		
-	protected:
-		uint32_t getPixelIndex(uint32_t aX, uint32_t aY);
-		bool projectPoint(Vector4f& aPoint, const tDrawOptions& aDrawOptions);
-		float withOverHeight();
-		float normalized_depth(float aZ) const;
-
 	protected:
 		uint32_t m_width;
 		uint32_t m_height;
 		uint32_t m_color_bytes;
 
 		//Buffers
+		//TODO: make 2 buffers
 		struct tRenderBuffer {
 			std::vector<uint32_t> color;
 			std::vector<float> depth;
 			std::atomic<bool>* mutex;
-		} m_buffer;
+			std::atomic<bool> is_cleared;
+		};
+
+		std::array<tRenderBuffer, 32> m_buffers;
+		uint32_t m_buff_idx;
 
 		//Defaults
 		uint32_t m_default_color;
 		tFov m_default_fov;
 
+		ThreadPool m_pool;
+	protected:
+		void impl_drawTriangleFilled(const Vector4f* aVertices, const tDrawOptions& aDrawOptions);
+		void impl_drawTriangleFilled_barycentric(const Vector4f* aVertices, const tDrawOptions& aDrawOptions);
+		void impl_drawTriangleFilled_breseham_like(const Vector4f* aVertices, const tDrawOptions& aDrawOptions);
+		void impl_setPixel(const Vector4f& aVertice, uint32_t aColor);
+		void impl_drawLine(const Vector4f& aVertice0, const Vector4f& aVertice1, uint32_t aColor);
+		void impl_clear(uint32_t aColor, tRenderBuffer& aBuffer, bool aBackground);
+
+	protected:
+		uint32_t getPixelIndex(uint32_t aX, uint32_t aY);
+		bool projectPoint(Vector4f& aPoint, const tDrawOptions& aDrawOptions);
+		float withOverHeight();
+		float normalized_depth(float aZ) const;
+
+
+	protected:
+		inline tRenderBuffer& buff();
 	};
 
 	vector<std::array<Vector4f, 3>> generate_cube_lines();
